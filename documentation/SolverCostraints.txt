@@ -1,0 +1,105 @@
+Definition of Solver Constraints
+
+La presente sezione definisce i vincoli formali che il solver deve rispettare nel processo di assegnazione automatica delle supplenze. I vincoli sono classificati come Hard Constraints (obbligatori, non violabili) e costituiscono condizioni necessarie per la validità della soluzione.
+
+1. Disponibilità Oraria (Hard Constraint)
+
+Un docente può essere assegnato a una supplenza in una determinata ora solo se risulta disponibile in quell’intervallo temporale.
+
+Sono considerate ore valide:
+
+Ore marcate come disponibilità (“D”) nell’orario ufficiale.
+
+Ore rese disponibili temporaneamente (es. classe in visita di istruzione).
+
+Non sono valide:
+
+Ore di lezione già assegnate.
+
+Ore buca non dichiarate come disponibilità.
+
+2. Unicità di Assegnazione (Hard Constraint)
+
+Per ogni unità temporale (giorno, ora):
+
+Un docente non può essere assegnato a più di una classe.
+
+Una classe non può avere più di un docente assegnato.
+
+Non possono esistere sovrapposizioni orarie.
+
+3. Massimo Ore Consecutive (Hard Constraint)
+
+Un docente non può superare 7 ore consecutive in una singola giornata, considerando:
+
+Orario curricolare
+
+Supplenze assegnate
+
+Il solver deve verificare la consecutività prima dell’assegnazione.
+
+4. Massimo Monte Ore Settimanale (Hard Constraint)
+
+Il totale delle ore assegnate a un docente (curricolari + supplenze) non può superare:
+
+18 ore settimanali (orario contrattuale base)
+
+5. Assenze con Preavviso ≥ 48 ore (Hard Constraint)
+
+Nel caso di assenza comunicata con almeno 48 ore di anticipo:
+
+Se l’assenza riguarda le prime k ore consecutive → la classe entra k ore dopo.
+
+Se l’assenza riguarda le ultime k ore consecutive → la classe esce k ore prima.
+
+Per tali ore:
+
+Il solver non deve generare richieste di supplenza.
+
+6. Assenze con Preavviso < 48 ore (Hard Constraint)
+
+Nel caso di assenza con preavviso inferiore a 48 ore:
+
+Tutte le ore coinvolte devono essere coperte tramite supplenza.
+
+Il solver deve cercare assegnazioni valide per ciascuna ora.
+
+7. Gestione Visite di Istruzione (Hard Constraint)
+
+Quando una classe è in visita:
+
+I docenti accompagnatori risultano assenti.
+
+Le ore di lezione previste per quella classe non generano richieste di supplenza.
+
+I docenti che avrebbero lezione con quella classe diventano temporaneamente disponibili.
+
+Le disponibilità temporanee sono utilizzabili dal solver.
+
+8. Compatibilità Oraria Completa (Hard Constraint)
+
+Prima di assegnare una supplenza, il solver deve verificare:
+
+Assenza di sovrapposizioni.
+
+Rispetto del monte ore giornaliero.
+
+Rispetto del monte ore settimanale.
+
+Validità della disponibilità.
+
+Assenza di conflitti con eventi (visite, assenze, permessi).
+
+9. Priorità Solo Dopo Validazione Vincoli (Hard Constraint di Processo)
+
+Il solver può applicare eventuali criteri di priorità (equità, rotazione, minimizzazione carico) solo dopo aver filtrato le soluzioni che rispettano integralmente tutti i vincoli sopra definiti.
+
+Condizione di Validità della Soluzione
+
+Una soluzione è considerata valida se e solo se:
+
+Tutte le supplenze richieste risultano coperte (quando obbligatorie).
+
+Nessun vincolo hard è violato.
+
+Non esistono conflitti orari o superamenti di soglia.

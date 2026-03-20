@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>Gestione Supplenze Docenti</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 0;
+        }
+
+        header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 40px auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+
+        h2 {
+            margin-top: 0;
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        input[type="file"] {
+            width: 100%;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #2980b9;
+        }
+
+        .result {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .success {
+            color: green;
+        }
+
+        .error {
+            color: red;
+        }
+
+        footer {
+            text-align: center;
+            padding: 15px;
+            font-size: 14px;
+            color: #777;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Gestione Supplenze</h1>
+</header>
+
+<div class="container">
+    <h2>Carica i file Excel</h2>
+
+    <div class="form-group">
+        <label for="orarioFile">Orario Docenti (.xlsx)</label>
+        <input type="file" id="orarioFile" accept=".xlsx">
+    </div>
+
+    <div class="form-group">
+        <label for="assenzeFile">Assenze Docenti (.xlsx)</label>
+        <input type="file" id="assenzeFile" accept=".xlsx">
+    </div>
+
+    <button onclick="inviaFile()">Genera Sostituzioni</button>
+
+    <div class="result" id="result"></div>
+</div>
+
+<footer>
+    Sistema automatico di gestione supplenze
+</footer>
+
+<script>
+async function inviaFile() {
+    const orario = document.getElementById("orarioFile").files[0];
+    const assenze = document.getElementById("assenzeFile").files[0];
+    const resultDiv = document.getElementById("result");
+
+    if (!orario || !assenze) {
+        resultDiv.innerHTML = "<p class='error'>Seleziona entrambi i file.</p>";
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append("orario", orario);
+    formData.append("assenze", assenze);
+
+    resultDiv.innerHTML = "Elaborazione in corso...";
+
+    try {
+        const response = await fetch("http://localhost:8000/genera-sostituzioni", {
+            method: "POST",
+            body: formData
+        });
+
+        if (!response.ok) {
+            throw new Error("Errore nel server");
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "sostituzioni.pdf";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        resultDiv.innerHTML = "<p class='success'>PDF generato e scaricato con successo!</p>";
+
+    } catch (error) {
+        resultDiv.innerHTML = "<p class='error'>Errore durante l'elaborazione.</p>";
+        console.error(error);
+    }
+}
+</script>
+
+</body>
+</html>
