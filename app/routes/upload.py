@@ -1,6 +1,6 @@
 import os
 import tempfile
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, render_template
 from werkzeug.utils import secure_filename
 
 from app.parser import parse_all
@@ -12,6 +12,11 @@ ALLOWED_EXTENSIONS = {'xlsx'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+@upload_bp.route('/', methods=['GET'])
+def upload_page():
+    """Pagina HTML di upload (frontend)."""
+    return render_template('upload.html')
 
 @upload_bp.route('/genera-sostituzioni', methods=['POST'])
 def upload_files():
@@ -95,8 +100,3 @@ def upload_files():
             if path and os.path.exists(path):
                 os.remove(path)
         os.rmdir(temp_dir)
-
-@upload_bp.route('/', methods=['GET'])
-def upload_page():
-    """Pagina di upload (frontend)."""
-    return render_template('upload.html')

@@ -1,0 +1,5 @@
+# ignora file temporanei generati da Python
+__pycache__/
+*.pyc
+
+output.txt
