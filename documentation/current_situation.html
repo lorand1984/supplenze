@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Riepilogo User Story - Gestione Supplenze</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            margin: 20px;
+            padding: 0;
+            color: #212529;
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #6c757d;
+            margin-bottom: 30px;
+            font-style: italic;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: white;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        th {
+            background-color: #2c3e50;
+            color: white;
+            font-weight: 600;
+            padding: 12px 8px;
+            text-align: left;
+        }
+        td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #e9ecef;
+            vertical-align: top;
+        }
+        .stato-completato {
+            background-color: #d4edda;
+            color: #155724;
+            font-weight: 500;
+            padding: 4px 8px;
+            border-radius: 20px;
+            display: inline-block;
+            text-align: center;
+        }
+        .stato-futuro {
+            background-color: #fff3cd;
+            color: #856404;
+            font-weight: 500;
+            padding: 4px 8px;
+            border-radius: 20px;
+            display: inline-block;
+            text-align: center;
+        }
+        .stato-corsivo {
+            background-color: #cce5ff;
+            color: #004085;
+            font-weight: 500;
+            padding: 4px 8px;
+            border-radius: 20px;
+            display: inline-block;
+            text-align: center;
+        }
+        .epic-separator {
+            background-color: #e9ecef;
+            font-weight: bold;
+            border-top: 2px solid #2c3e50;
+            border-bottom: 2px solid #2c3e50;
+        }
+        .epic-separator td {
+            background-color: #dde2e6;
+            color: #1a2a3a;
+            font-size: 1.1em;
+            padding: 8px;
+        }
+        .note {
+            font-size: 0.9em;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <h1>📋 Riepilogo User Story</h1>
+    <div class="subtitle">Progetto Gestione Supplenze - Stato di avanzamento</div>
+
+     <table>
+        <thead>
+             <tr>
+                <th>ID</th>
+                <th>Titolo</th>
+                <th>Stato</th>
+                <th>Note</th>
+             </tr>
+        </thead>
+        <tbody>
+            <!-- Epic 1 – Fondamenta Backend -->
+            <tr class="epic-separator"><td colspan="4">🚧 Epic 1 – Fondamenta Backend</td></tr>
+            <tr><td>US1</td><td>Setup Flask</td><td><span class="stato-completato">✅ Completato</span></td><td>Struttura base del progetto Flask, endpoint /health</td></tr>
+            <tr><td>US2</td><td>Definizione Modello Dati</td><td><span class="stato-completato">✅ Completato</span></td><td>Classi Docente, Assenza, VisitaIstruzione, OraScoperta, Assegnazione</td></tr>
+            <tr><td>US3</td><td>Endpoint Upload File</td><td><span class="stato-completato">✅ Completato</span></td><td>POST /genera-sostituzioni con validazione base</td></tr>
+            <tr><td>US4</td><td>Parsing Orario e Assenze</td><td><span class="stato-completato">✅ Completato</span></td><td>Lettura Excel e creazione oggetti Python</td></tr>
+            <tr><td>US4b</td><td>Parsing Visite di Istruzione</td><td><span class="stato-completato">✅ Completato</span></td><td>Lettura file visite (intera giornata)</td></tr>
+            <tr><td>US4c</td><td>Validazione Consistenza Dati</td><td><span class="stato-completato">✅ Completato</span></td><td>Controlli incrociati su docenti, ore, visite</td></tr>
+
+            <!-- Epic 2 – Motore di Assegnazione (ASP) -->
+            <tr class="epic-separator"><td colspan="4">⚙️ Epic 2 – Motore di Assegnazione (ASP)</td></tr>
+            <tr><td>US5</td><td>Traduzione Modelli in Fatti ASP</td><td><span class="stato-completato">✅ Completato</span></td><td>Generazione fatti lezione/4, disponibile/3, assenza/5, visita/4</td></tr>
+            <tr><td>US6</td><td>Regole ASP per Ore Scoperte</td><td><span class="stato-completato">✅ Completato</span></td><td>Determinazione di richiede_supplenza/4 (preavviso, prime/ultime ore)</td></tr>
+            <tr><td>US7</td><td>Regole ASP per Assegnazione e Vincoli</td><td><span class="stato-completato">✅ Completato</span></td><td>Regole di scelta e vincoli di unicità (assegna/4)</td></tr>
+            <tr><td>US7b</td><td>Ottimizzazione: Bilanciamento carico e disponibilità</td><td><span class="stato-futuro">🔄 Da fare</span></td><td>Weak constraints per equità e preferenza docenti con più D</td></tr>
+            <tr><td>US7c</td><td>Ottimizzazione: Continuità didattica</td><td><span class="stato-futuro">🔄 Da fare</span></td><td>Weak constraint per favorire docenti che già insegnano nella classe</td></tr>
+            <tr><td>US8</td><td>Integrazione Clingo nel Backend</td><td><span class="stato-completato">✅ Completato</span></td><td>Funzione calcola_assegnazioni che esegue il solver e restituisce oggetti Python</td></tr>
+            <tr><td>US16</td><td>Gestione accorpamento classi in assenza di soluzione</td><td><span class="stato-futuro">🔄 Da fare</span></td><td>Se nessuna soluzione con vincolo di unicità, si rilassa permettendo a un docente di coprire fino a 2 classi nella stessa ora. L'algoritmo tenta prima la versione stretta, poi quella rilassata.</td></tr>
+
+            <!-- Epic 3 – Output e Frontend -->
+            <tr class="epic-separator"><td colspan="4">🖥️ Epic 3 – Output e Frontend</td></tr>
+            <tr><td>US9</td><td>Endpoint Recupero Assegnazioni</td><td><span class="stato-completato">✅ Completato</span></td><td>GET /assegnazioni con JSON raggruppato per docente e supporto ?all=true</td></tr>
+            <tr><td>US10</td><td>Export PDF</td><td><span class="stato-futuro">🔄 Da fare</span></td><td>Generazione PDF delle assegnazioni</td></tr>
+            <tr><td>US11</td><td>UI Upload File</td><td><span class="stato-futuro">🔄 Da fare</span></td><td>Pagina HTML con form per caricare i file Excel</td></tr>
+            <tr><td>US12</td><td>UI Visualizzazione Risultati</td><td><span class="stato-futuro">🔄 Da fare</span></td><td>Tabella HTML che interroga /assegnazioni e mostra i dati</td></tr>
+
+            <!-- Epic 4 – Testing e Qualità -->
+            <tr class="epic-separator"><td colspan="4">🧪 Epic 4 – Testing e Qualità</td></tr>
+            <tr><td>US15</td><td>Test End‑to‑End (con generatori)</td><td><span class="stato-corsivo">🔧 In corso</span></td><td>Script per generazione orari/assenze e test completo del flusso (da terminare)</td></tr>
+        </tbody>
+     </table>
+
+    <footer style="text-align: center; margin-top: 30px; color: #6c757d; font-size: 0.9em;">
+        Ultimo aggiornamento: <span id="data"></span> · Progetto Gestione Supplenze
+    </footer>
+    <script>
+        document.getElementById('data').innerText = new Date().toLocaleDateString('it-IT');
+    </script>
+</body>
+</html>
