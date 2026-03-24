@@ -1,5 +1,6 @@
 import os
 import tempfile
+from datetime import datetime
 from flask import Blueprint, request, jsonify, current_app, render_template
 from werkzeug.utils import secure_filename
 
@@ -21,10 +22,10 @@ def upload_page():
 @upload_bp.route('/genera-sostituzioni', methods=['POST'])
 def upload_files():
     """
-    Endpoint per il caricamento dei file Excel (orario, assenze, visite opzionale).
-    Effettua il parsing, calcola le assegnazioni e memorizza il risultato.
+    Endpoint per il caricamento dei file Excel (orario, assenze, visite opzionale)
+    e per la specifica della data delle sostituzioni.
     """
-    # Verifica presenza dei file obbligatori
+    # 1. Verifica presenza dei file obbligatori
     if 'orario' not in request.files:
         return jsonify({'error': 'File orario mancante'}), 400
     if 'assenze' not in request.files:
@@ -33,26 +34,32 @@ def upload_files():
     orario_file = request.files['orario']
     assenze_file = request.files['assenze']
 
-    # Controllo che i file non abbiano nome vuoto
     if orario_file.filename == '':
         return jsonify({'error': 'Nessun file selezionato per orario'}), 400
     if assenze_file.filename == '':
         return jsonify({'error': 'Nessun file selezionato per assenze'}), 400
 
-    # Verifica estensioni
     if not allowed_file(orario_file.filename):
         return jsonify({'error': 'Il file orario deve essere in formato .xlsx'}), 400
     if not allowed_file(assenze_file.filename):
         return jsonify({'error': 'Il file assenze deve essere in formato .xlsx'}), 400
 
-    # Crea directory temporanea
+    # 2. Gestione data
+    data_str = request.form.get('data')
+    if not data_str:
+        return jsonify({'error': 'Data non specificata'}), 400
+    try:
+        data_selezionata = datetime.strptime(data_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Formato data non valido (YYYY-MM-DD)'}), 400
+
+    # 3. Crea directory temporanea
     temp_dir = tempfile.mkdtemp()
     orario_path = os.path.join(temp_dir, secure_filename(orario_file.filename))
     assenze_path = os.path.join(temp_dir, secure_filename(assenze_file.filename))
     visite_path = None
 
     try:
-        # Salva i file
         orario_file.save(orario_path)
         assenze_file.save(assenze_path)
 
@@ -70,21 +77,25 @@ def upload_files():
             orario_path, assenze_path, visite_path, ore_giornaliere
         )
 
-        # Calcola il primo modello (per l'endpoint standard)
-        assegnazioni = calcola_assegnazioni(docenti, assenze, visite, ore_giornaliere, tutti_modelli=False)
+        # Filtra le assenze per la data selezionata
+        assenze_filtrate = [a for a in assenze if a.data == data_selezionata]
+        if not assenze_filtrate:
+            return jsonify({'error': f'Nessuna assenza trovata per la data {data_selezionata.isoformat()}'}), 400
 
-        # Calcola tutti i modelli (per debug o visualizzazione alternativa)
-        modelli = calcola_assegnazioni(docenti, assenze, visite, ore_giornaliere, tutti_modelli=True)
+        # Calcola le assegnazioni
+        assegnazioni = calcola_assegnazioni(docenti, assenze_filtrate, visite, ore_giornaliere, tutti_modelli=False)
+        modelli = calcola_assegnazioni(docenti, assenze_filtrate, visite, ore_giornaliere, tutti_modelli=True)
 
-        # Memorizza entrambi nella configurazione dell'app
+        # Memorizza i risultati e la data
         current_app.config['ULTIME_ASSEGNAZIONI'] = assegnazioni
         current_app.config['ULTIMI_MODELLI'] = modelli
+        current_app.config['DATA_SUPPLENZE'] = data_selezionata.isoformat()
 
         return jsonify({
             'message': 'File elaborati con successo',
             'stats': {
                 'docenti': len(docenti),
-                'assenze': len(assenze),
+                'assenze': len(assenze_filtrate),
                 'visite': len(visite),
                 'assegnazioni': len(assegnazioni) if assegnazioni else 0,
                 'modelli_trovati': len(modelli)

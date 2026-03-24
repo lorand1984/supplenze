@@ -97,6 +97,11 @@
     <div class="container">
         <h1>Gestione Supplenze</h1>
         <form id="uploadForm" enctype="multipart/form-data">
+			<div class="form-group">
+				<label for="data">Data delle sostituzioni *</label>
+				<input type="date" id="data" name="data" required>
+				<small>Seleziona il giorno per cui calcolare le supplenze.</small>
+			</div>
             <div class="form-group">
                 <label for="orario">Orario Docenti (.xlsx) *</label>
                 <input type="file" id="orario" name="orario" accept=".xlsx" required>
@@ -118,6 +123,9 @@
     </div>
 
     <script>
+		// Imposta la data odierna come default
+		const today = new Date().toISOString().slice(0, 10);
+		document.getElementById('data').value = today;
         const form = document.getElementById('uploadForm');
         const submitBtn = document.getElementById('submitBtn');
         const messageDiv = document.getElementById('message');
