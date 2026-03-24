@@ -56,4 +56,5 @@ def get_assegnazioni():
 
 @assegnazioni_bp.route('/visualizza', methods=['GET'])
 def visualizza():
-    return render_template('risultati.html')
+    return render_template('risultati.html')    
+  

@@ -43,3 +43,8 @@ def test_get_assegnazioni_con_dati(client):
     assert supplenza['ora'] == 2
     assert supplenza['docente_assente'] == 'Rossi'
     assert supplenza['classe'] == '1A'
+    
+def test_visualizza_page(client):
+    response = client.get('/visualizza')
+    assert response.status_code == 200
+    assert b'Assegnazioni Supplenze' in response.data
