@@ -1,3 +1,5 @@
+# tests/test_assegnazioni.py
+
 import pytest
 from datetime import date
 from app import create_app
@@ -17,8 +19,7 @@ def test_get_assegnazioni_vuote(client):
     assert response.json == []
 
 def test_get_assegnazioni_con_dati(client):
-    """Endpoint deve restituire le assegnazioni precedentemente memorizzate."""
-    # Simula la memorizzazione di alcune assegnazioni
+    """Endpoint deve restituire le assegnazioni precedentemente memorizzate (raggruppate)."""
     ora_scoperta = OraScoperta(
         data=date(2025, 3, 10),
         ora=2,
@@ -35,8 +36,10 @@ def test_get_assegnazioni_con_dati(client):
     response = client.get('/assegnazioni')
     assert response.status_code == 200
     assert len(response.json) == 1
-    assert response.json[0]['data'] == '2025-03-10'
-    assert response.json[0]['ora'] == 2
-    assert response.json[0]['classe'] == '1A'
-    assert response.json[0]['docente_supplente'] == 'Verdi'
-    assert response.json[0]['docente_assente'] == 'Rossi'
+    gruppo = response.json[0]
+    assert gruppo['docente_supplente'] == 'Verdi'
+    assert len(gruppo['supplenze']) == 1
+    supplenza = gruppo['supplenze'][0]
+    assert supplenza['ora'] == 2
+    assert supplenza['docente_assente'] == 'Rossi'
+    assert supplenza['classe'] == '1A'

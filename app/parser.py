@@ -217,10 +217,13 @@ def parse_visite(file_path: str, ore_giornaliere: int = 6) -> List[VisitaIstruzi
             raise ValueError(f"Riga {row_idx}: Classe deve essere una stringa")
         if not isinstance(data, datetime):
             raise ValueError(f"Riga {row_idx}: Data non valida")
-        if not isinstance(docenti_raw, str):
-            raise ValueError(f"Riga {row_idx}: Docenti_accompagnatori deve essere una stringa separata da virgole")
-
-        docenti_list = [d.strip() for d in docenti_raw.split(',') if d.strip()]
+        # Gestisce None o stringa vuota
+        if docenti_raw is None:
+            docenti_list = []
+        elif isinstance(docenti_raw, str):
+            docenti_list = [d.strip() for d in docenti_raw.split(',') if d.strip()]
+        else:
+            raise ValueError(f"Riga {row_idx}: Docenti_accompagnatori deve essere una stringa separata da virgole, o vuoto")
 
         visita = VisitaIstruzione(
             classe=classe,

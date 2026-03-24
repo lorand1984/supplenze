@@ -5,11 +5,9 @@ from typing import List, Optional, Dict, Tuple, Any
 from app.models import Docente, Assenza, VisitaIstruzione, Assegnazione, OraScoperta
 from app.asp_facts import generate_asp_facts
 
-MAX_MODELLI = 100  # limite per evitare overflow
-
 def _estrai_modello(model, richieste_trovate, mappa_data):
-    """Converte un modello Clingo in lista di assegnazioni (dict)."""
-    modello_dict = []
+    """Converte un modello Clingo in lista di oggetti Assegnazione."""
+    assegnazioni = []
     for sym in model.symbols(shown=True):
         if sym.name == "assegna" and len(sym.arguments) == 4:
             docente = str(sym.arguments[0]).strip('"')
@@ -19,14 +17,16 @@ def _estrai_modello(model, richieste_trovate, mappa_data):
             docente_assente = richieste_trovate.get((giorno, ora, classe), "")
             data = mappa_data.get((giorno, ora, classe))
             if data:
-                modello_dict.append({
-                    'ora': ora,
-                    'classe': classe,
-                    'docente_supplente': docente,
-                    'docente_assente': docente_assente,
-                    'data': data.isoformat()
-                })
-    return modello_dict
+                ora_scoperta = OraScoperta(
+                    data=data,
+                    ora=ora,
+                    classe=classe,
+                    docente_assente_nome=docente_assente,
+                    richiede_supplenza=True,
+                    stato="assegnata"
+                )
+                assegnazioni.append(Assegnazione(ora_scoperta=ora_scoperta, docente_supplente_nome=docente))
+    return assegnazioni
 
 def calcola_assegnazioni(
     docenti: List[Docente],
@@ -37,8 +37,8 @@ def calcola_assegnazioni(
 ) -> List[Any]:
     """
     Esegue il solver ASP per determinare le assegnazioni delle supplenze.
-    Se tutti_modelli=True, restituisce una lista di liste (tutti i modelli).
-    Altrimenti restituisce una lista di assegnazioni (primo modello).
+    Se tutti_modelli=True, restituisce una lista di liste di Assegnazione (tutti i modelli).
+    Altrimenti restituisce una lista di Assegnazione (primo modello).
     Solleva RuntimeError se il problema è insoddisfacibile.
     """
     if visite is None:
@@ -92,8 +92,6 @@ def calcola_assegnazioni(
         modelli = []
 
         def on_model(model):
-            if len(modelli) >= MAX_MODELLI:
-                return
             modelli.append(_estrai_modello(model, richieste_trovate, mappa_data))
 
         result = ctl.solve(on_model=on_model)

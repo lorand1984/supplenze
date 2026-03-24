@@ -4,7 +4,7 @@ import tempfile
 from datetime import date, datetime
 from openpyxl import Workbook
 
-from app.parser import parse_orario, parse_assenze, parse_all
+from app.parser import parse_orario, parse_assenze, parse_all, parse_visite
 from app.models import Docente, Assenza
 
 # ----------------------------------------------------------------------
@@ -50,6 +50,19 @@ def crea_excel_assenze(assenze_data):
                 riga[i] = datetime.combine(riga[i], datetime.min.time())
         ws.append(riga)
 
+    temp = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
+    wb.save(temp.name)
+    temp.close()
+    return temp.name
+
+def crea_excel_visite(visite_data):
+    """Crea un file Excel di visite (solo per test)."""
+    wb = Workbook()
+    ws = wb.active
+    headers = ["Classe", "Data", "Docenti_accompagnatori"]
+    ws.append(headers)
+    for vis in visite_data:
+        ws.append([vis[0], vis[1], vis[2]])
     temp = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
     wb.save(temp.name)
     temp.close()
@@ -377,6 +390,60 @@ class TestParseAssenze:
             os.unlink(file_path)
 
 # ----------------------------------------------------------------------
+# Test parse_visite
+# ----------------------------------------------------------------------
+
+class TestParseVisite:
+    def test_visite_valide(self):
+        dati = [
+            ("1A", date(2025,3,14), "Rossi, Verdi"),
+            ("2B", date(2025,3,15), "Bianchi"),
+        ]
+        file_path = crea_excel_visite(dati)
+        try:
+            visite = parse_visite(file_path, ore_giornaliere=6)
+            assert len(visite) == 2
+            v1 = visite[0]
+            assert v1.classe == "1A"
+            assert v1.data == date(2025,3,14)
+            assert v1.ora_inizio == 1
+            assert v1.ora_fine == 6
+            assert v1.docenti_accompagnatori == ["Rossi", "Verdi"]
+            v2 = visite[1]
+            assert v2.classe == "2B"
+            assert v2.docenti_accompagnatori == ["Bianchi"]
+        finally:
+            os.unlink(file_path)
+
+    def test_visite_intestazione_errata(self):
+        wb = Workbook()
+        ws = wb.active
+        ws.append(["Classe", "Data", "Ora_inizio", "Docenti"])  # sbagliato
+        temp = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
+        wb.save(temp.name)
+        temp.close()
+        try:
+            with pytest.raises(ValueError, match="Intestazioni non corrispondenti"):
+                parse_visite(temp.name)
+        finally:
+            os.unlink(temp.name)
+
+    def test_visite_docenti_mancanti(self):
+        wb = Workbook()
+        ws = wb.active
+        ws.append(["Classe", "Data", "Docenti_accompagnatori"])
+        ws.append(["1A", datetime(2025,3,14), None])  # cella vuota (None)
+        temp = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
+        wb.save(temp.name)
+        temp.close()
+        try:
+            visite = parse_visite(temp.name)
+            assert len(visite) == 1
+            assert visite[0].docenti_accompagnatori == []
+        finally:
+            os.unlink(temp.name)
+
+# ----------------------------------------------------------------------
 # Test parse_all
 # ----------------------------------------------------------------------
 
@@ -389,9 +456,10 @@ class TestParseAll:
         assenze_path = crea_excel_assenze(assenze_dati)
 
         try:
-            docenti, assenze = parse_all(orario_path, assenze_path)
+            docenti, assenze, visite = parse_all(orario_path, assenze_path, None, 6)
             assert len(docenti) == 1
             assert len(assenze) == 1
+            assert len(visite) == 0
         finally:
             os.unlink(orario_path)
             os.unlink(assenze_path)
@@ -410,7 +478,7 @@ class TestParseAll:
 
         try:
             with pytest.raises(ValueError, match="La prima colonna deve essere 'Docente'"):
-                parse_all(orario_path.name, assenze_path)
+                parse_all(orario_path.name, assenze_path, None, 6)
         finally:
             os.unlink(orario_path.name)
             os.unlink(assenze_path)

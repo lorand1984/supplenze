@@ -3,20 +3,28 @@ from collections import defaultdict
 
 assegnazioni_bp = Blueprint('assegnazioni', __name__, template_folder='../templates')
 
+def assegna_dict(assegnazione):
+    """Converte un oggetto Assegnazione in dict per JSON."""
+    return {
+        'ora': assegnazione.ora_scoperta.ora,
+        'classe': assegnazione.ora_scoperta.classe,
+        'docente_supplente': assegnazione.docente_supplente_nome,
+        'docente_assente': assegnazione.ora_scoperta.docente_assente_nome
+    }
+
 def raggruppa_per_docente(assegnazioni):
     """
-    Raggruppa una lista piatta di assegnazioni per docente_supplente.
-    Input: lista di dict con chiavi: 'ora', 'classe', 'docente_supplente', 'docente_assente'
-    Output: lista di dict con struttura:
-        [{'docente_supplente': '...', 'supplenze': [{'ora':..., 'docente_assente':..., 'classe':...}, ...]}, ...]
+    Raggruppa una lista di oggetti Assegnazione per docente supplente.
+    Restituisce lista di dict per JSON.
     """
     gruppi = defaultdict(list)
     for a in assegnazioni:
-        docente = a['docente_supplente']
+        d = assegna_dict(a)
+        docente = d['docente_supplente']
         gruppi[docente].append({
-            'ora': a['ora'],
-            'docente_assente': a['docente_assente'],
-            'classe': a['classe']
+            'ora': d['ora'],
+            'docente_assente': d['docente_assente'],
+            'classe': d['classe']
         })
     risultato = []
     for docente, lista in gruppi.items():
@@ -30,22 +38,22 @@ def raggruppa_per_docente(assegnazioni):
 def get_assegnazioni():
     """
     Restituisce le assegnazioni.
-    - Se ?all=true restituisce tutti i modelli (lista di liste piatte).
-    - Altrimenti restituisce il primo modello raggruppato per docente supplente.
+    Se ?all=true restituisce tutti i modelli (lista di liste di dict).
+    Altrimenti restituisce il primo modello raggruppato per docente supplente.
     """
     tutti = request.args.get('all', 'false').lower() == 'true'
     if tutti:
         modelli = current_app.config.get('ULTIMI_MODELLI', [])
-        return jsonify(modelli)
+        modelli_dict = []
+        for modello in modelli:
+            modelli_dict.append([assegna_dict(a) for a in modello])
+        return jsonify(modelli_dict)
     else:
         assegnazioni = current_app.config.get('ULTIME_ASSEGNAZIONI', [])
-        # Se non ci sono assegnazioni, restituisci lista vuota
         if not assegnazioni:
             return jsonify([])
-        # Raggruppa e restituisci
         return jsonify(raggruppa_per_docente(assegnazioni))
 
 @assegnazioni_bp.route('/visualizza', methods=['GET'])
 def visualizza():
-    """Pagina HTML per visualizzare i risultati (frontend)."""
     return render_template('risultati.html')
