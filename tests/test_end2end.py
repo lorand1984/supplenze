@@ -1,17 +1,19 @@
 import sys
 import os
 import json
+import pytest
+from datetime import date
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-import pytest
 from app import create_app
 from tests.generators import genera_orario, genera_assenze
 
 @pytest.fixture(scope='module')
 def generated_files():
-    """Genera i file Excel di test e restituisce i percorsi."""
+    """Genera i file Excel di test con una data fissa."""
     orario_file = genera_orario.genera_orario("orario_test.xlsx")
-    assenze_file = genera_assenze.genera_assenze("assenze_test.xlsx")
+    # Utilizza una data fissa per rendere il test deterministico
+    assenze_file = genera_assenze.genera_assenze("assenze_test.xlsx", num_assenze=10, start_date=date(2025, 3, 10))
     yield orario_file, assenze_file
     os.remove(orario_file)
     os.remove(assenze_file)
@@ -24,14 +26,14 @@ def client():
         yield client
 
 def test_end2end(generated_files, client):
-    """Test completo: upload, recupero assegnazioni, verifica coerenza."""
     orario_file, assenze_file = generated_files
 
     # 1. Upload dei file
     with open(orario_file, 'rb') as f_orario, open(assenze_file, 'rb') as f_assenze:
         data = {
             'orario': (f_orario, os.path.basename(orario_file)),
-            'assenze': (f_assenze, os.path.basename(assenze_file))
+            'assenze': (f_assenze, os.path.basename(assenze_file)),
+            'data': '2025-03-10'  # data fissa per il test
         }
         response = client.post('/genera-sostituzioni', data=data, content_type='multipart/form-data')
 
@@ -78,7 +80,6 @@ def test_end2end(generated_files, client):
 
     # 4. Verifica di non avere conflitti nel primo modello
     if assegnazioni:
-        # Raccogli tutte le supplenze in lista piatta
         tutte = []
         for gruppo in assegnazioni:
             docente = gruppo['docente_supplente']

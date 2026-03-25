@@ -23,6 +23,13 @@
             text-align: center;
             color: #2c3e50;
         }
+        .data-info {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #2c3e50;
+        }
         .link {
             text-align: center;
             margin-bottom: 20px;
@@ -40,6 +47,9 @@
             font-size: 14px;
             border-radius: 4px;
             border: 1px solid #ccc;
+        }
+        select {
+            width: 300px;
         }
         .loading, .error {
             text-align: center;
@@ -73,6 +83,7 @@
 <body>
     <div class="container">
         <h1>Assegnazioni Supplenze</h1>
+        <div id="data-info" class="data-info"></div>
         <div class="link">
             <a href="/">← Carica nuovi file</a>
         </div>
@@ -93,7 +104,7 @@
                 </thead>
                 <tbody id="tabella-body">
                 </tbody>
-            </table>
+             </>
         </div>
     </div>
 
@@ -127,9 +138,18 @@
 
         async function caricaModelli() {
             try {
-                const response = await fetch('/assegnazioni?all=true');
-                if (!response.ok) throw new Error('Errore nel caricamento dei modelli');
-                modelli = await response.json();
+                const [modelliRes, infoRes] = await Promise.all([
+                    fetch('/assegnazioni?all=true'),
+                    fetch('/data_info')
+                ]);
+                if (!modelliRes.ok) throw new Error('Errore nel caricamento dei modelli');
+                modelli = await modelliRes.json();
+                const info = await infoRes.json();
+                if (info.data) {
+                    document.getElementById('data-info').innerHTML = `📅 Sostituzioni del giorno: <strong>${info.data}</strong>`;
+                } else {
+                    document.getElementById('data-info').innerHTML = '📅 Data non specificata';
+                }
                 document.getElementById('loading').style.display = 'none';
 
                 if (!modelli || modelli.length === 0) {
@@ -138,7 +158,7 @@
                     return;
                 }
 
-                // Popola il selettore con i primi 10 modelli (o tutti se meno)
+                // Popola il selettore con i primi 100 modelli (o tutti se meno)
                 const select = document.getElementById('modelSelect');
                 select.innerHTML = '';
                 const maxModelli = Math.min(modelli.length, 100);
