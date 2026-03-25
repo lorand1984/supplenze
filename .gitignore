@@ -1,5 +1,5 @@
 # ignora file temporanei generati da Python
 __pycache__/
 *.pyc
-
+*.xlsx
 output.txt

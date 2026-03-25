@@ -17,5 +17,8 @@ def create_app():
 
     # Variabile globale per memorizzare le ultime assegnazioni
     app.config['ULTIME_ASSEGNAZIONI'] = []
+    
+    print(app.url_map)
+
 
     return app

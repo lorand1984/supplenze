@@ -56,5 +56,11 @@ def get_assegnazioni():
 
 @assegnazioni_bp.route('/visualizza', methods=['GET'])
 def visualizza():
-    return render_template('risultati.html')    
+    return render_template('risultati.html') 
+
+@assegnazioni_bp.route('/data_info', methods=['GET'])
+def data_info():
+    """Restituisce la data delle ultime sostituzioni calcolate."""
+    data = current_app.config.get('DATA_SUPPLENZE', None)
+    return jsonify({'data': data})    
   
