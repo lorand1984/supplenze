@@ -23,7 +23,7 @@ def upload_page():
 def upload_files():
     """
     Endpoint per il caricamento dei file Excel (orario, assenze, visite opzionale)
-    e per la specifica della data delle sostituzioni.
+    e per la specifica della data delle sostituzioni e del numero massimo di modelli.
     """
     # 1. Verifica presenza dei file obbligatori
     if 'orario' not in request.files:
@@ -53,7 +53,18 @@ def upload_files():
     except ValueError:
         return jsonify({'error': 'Formato data non valido (YYYY-MM-DD)'}), 400
 
-    # 3. Crea directory temporanea
+    # 3. Gestione numero massimo di modelli (nuovo)
+    max_modelli_str = request.form.get('max_modelli', '10')
+    try:
+        max_modelli = int(max_modelli_str)
+        if max_modelli < 1:
+            max_modelli = 1
+        elif max_modelli > 100:
+            max_modelli = 100
+    except ValueError:
+        max_modelli = 10
+
+    # 4. Crea directory temporanea
     temp_dir = tempfile.mkdtemp()
     orario_path = os.path.join(temp_dir, secure_filename(orario_file.filename))
     assenze_path = os.path.join(temp_dir, secure_filename(assenze_file.filename))
@@ -82,14 +93,24 @@ def upload_files():
         if not assenze_filtrate:
             return jsonify({'error': f'Nessuna assenza trovata per la data {data_selezionata.isoformat()}'}), 400
 
-        # Calcola le assegnazioni
-        assegnazioni = calcola_assegnazioni(docenti, assenze_filtrate, visite, ore_giornaliere, tutti_modelli=False)
-        modelli = calcola_assegnazioni(docenti, assenze_filtrate, visite, ore_giornaliere, tutti_modelli=True)
+        # Calcola le assegnazioni (primo modello)
+        assegnazioni = calcola_assegnazioni(
+            docenti, assenze_filtrate, visite, ore_giornaliere,
+            tutti_modelli=False
+        )
 
-        # Memorizza i risultati e la data
+        # Calcola tutti i modelli (con limite configurabile)
+        modelli = calcola_assegnazioni(
+            docenti, assenze_filtrate, visite, ore_giornaliere,
+            tutti_modelli=True,
+            max_modelli=max_modelli
+        )
+
+        # Memorizza i risultati, la data e il limite usato
         current_app.config['ULTIME_ASSEGNAZIONI'] = assegnazioni
         current_app.config['ULTIMI_MODELLI'] = modelli
         current_app.config['DATA_SUPPLENZE'] = data_selezionata.isoformat()
+        current_app.config['MAX_MODELLI'] = max_modelli
 
         return jsonify({
             'message': 'File elaborati con successo',
@@ -98,7 +119,8 @@ def upload_files():
                 'assenze': len(assenze_filtrate),
                 'visite': len(visite),
                 'assegnazioni': len(assegnazioni) if assegnazioni else 0,
-                'modelli_trovati': len(modelli)
+                'modelli_trovati': len(modelli),
+                'max_modelli_richiesti': max_modelli
             }
         }), 200
 

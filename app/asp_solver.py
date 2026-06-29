@@ -33,11 +33,12 @@ def calcola_assegnazioni(
     assenze: List[Assenza],
     visite: Optional[List[VisitaIstruzione]] = None,
     ore_giornaliere: int = 6,
-    tutti_modelli: bool = False
+    tutti_modelli: bool = False,
+    max_modelli: int = 10
 ) -> List[Any]:
     """
     Esegue il solver ASP per determinare le assegnazioni delle supplenze.
-    Se tutti_modelli=True, restituisce una lista di liste di Assegnazione (tutti i modelli).
+    Se tutti_modelli=True, restituisce una lista di liste di Assegnazione (tutti i modelli, limitati a max_modelli).
     Altrimenti restituisce una lista di Assegnazione (primo modello).
     Solleva RuntimeError se il problema è insoddisfacibile.
     """
@@ -88,7 +89,8 @@ def calcola_assegnazioni(
     ctl.ground([("base", [])])
 
     if tutti_modelli:
-        ctl.configuration.solve.models = 0  # tutti i modelli
+        # Imposta il limite massimo di modelli (parametro configurabile)
+        ctl.configuration.solve.models = max_modelli
         modelli = []
 
         def on_model(model):

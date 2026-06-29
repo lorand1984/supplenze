@@ -1,9 +1,14 @@
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import pytest
 import io
 import tempfile
 from datetime import date, datetime
 from openpyxl import Workbook
 from app import create_app
+from app.models import Assenza
 
 @pytest.fixture
 def client():
@@ -29,32 +34,68 @@ def crea_excel_assenze_con_date_diverse():
 
 class TestUploadEndpoint:
     def test_upload_success(self, client, monkeypatch):
-        # Mock parse_all e calcola_assegnazioni per evitare la complessità reale
+        # Mock parse_all per restituire un'assenza valida per la data richiesta
         def mock_parse_all(a, b, c=None, d=6):
-            return [], [], []
+            # Crea un'assenza fittizia per la data 2025-03-18
+            assenza = Assenza(
+                docente_nome="Rossi",
+                data=date(2025, 3, 18),
+                ora_inizio=1,
+                ora_fine=2,
+                tipo_assenza="PERMESSO",
+                data_comunicazione=date(2025, 3, 18)
+            )
+            # Restituisci anche un docente fittizio per evitare altri errori
+            from app.models import Docente
+            docente = Docente(nome="Rossi", orario={})
+            return [docente], [assenza], []
+        
+        monkeypatch.setattr('app.routes.upload.parse_all', mock_parse_all)
+        
+        # Mock calcola_assegnazioni per evitare l'esecuzione del solver
         def mock_calcola_assegnazioni(*args, **kwargs):
             return []
-        monkeypatch.setattr('app.routes.upload.parse_all', mock_parse_all)
-        monkeypatch.setattr('app.routes.upload.calcola_assegnazioni', mock_calcola_assegnazioni)
+        monkeypatch.setattr('app.asp_solver.calcola_assegnazioni', mock_calcola_assegnazioni)
+        
+        # Mock anche la funzione all'interno di upload.py
+        import app.routes.upload
+        monkeypatch.setattr(app.routes.upload, 'calcola_assegnazioni', mock_calcola_assegnazioni)
 
         data = {
             'orario': create_excel_file(),
             'assenze': create_excel_file(),
-            'data': '2025-03-18'
+            'data': '2025-03-18',
+            'max_modelli': '10'
         }
         response = client.post('/genera-sostituzioni', data=data, content_type='multipart/form-data')
+
         assert response.status_code == 200
         assert response.json['message'] == 'File elaborati con successo'
-        assert response.json['stats'] == {'docenti': 0, 'assenze': 0, 'visite': 0, 'assegnazioni': 0, 'modelli_trovati': 0}
+        assert response.json['stats'] == {
+            'docenti': 1,
+            'assenze': 1,
+            'visite': 0,
+            'assegnazioni': 0,
+            'modelli_trovati': 0,
+            'max_modelli_richiesti': 10
+        }
 
     def test_missing_orario(self, client):
-        data = {'assenze': create_excel_file(), 'data': '2025-03-18'}
+        data = {
+            'assenze': create_excel_file(),
+            'data': '2025-03-18',
+            'max_modelli': '10'
+        }
         response = client.post('/genera-sostituzioni', data=data, content_type='multipart/form-data')
         assert response.status_code == 400
         assert 'orario mancante' in response.json['error']
 
     def test_missing_assenze(self, client):
-        data = {'orario': create_excel_file(), 'data': '2025-03-18'}
+        data = {
+            'orario': create_excel_file(),
+            'data': '2025-03-18',
+            'max_modelli': '10'
+        }
         response = client.post('/genera-sostituzioni', data=data, content_type='multipart/form-data')
         assert response.status_code == 400
         assert 'assenze mancante' in response.json['error']
@@ -63,7 +104,8 @@ class TestUploadEndpoint:
         data = {
             'orario': (io.BytesIO(b''), ''),
             'assenze': create_excel_file(),
-            'data': '2025-03-18'
+            'data': '2025-03-18',
+            'max_modelli': '10'
         }
         response = client.post('/genera-sostituzioni', data=data, content_type='multipart/form-data')
         assert response.status_code == 400
@@ -73,7 +115,8 @@ class TestUploadEndpoint:
         data = {
             'orario': create_excel_file(),
             'assenze': (io.BytesIO(b''), ''),
-            'data': '2025-03-18'
+            'data': '2025-03-18',
+            'max_modelli': '10'
         }
         response = client.post('/genera-sostituzioni', data=data, content_type='multipart/form-data')
         assert response.status_code == 400
@@ -83,7 +126,8 @@ class TestUploadEndpoint:
         data = {
             'orario': create_excel_file(filename='test.txt'),
             'assenze': create_excel_file(),
-            'data': '2025-03-18'
+            'data': '2025-03-18',
+            'max_modelli': '10'
         }
         response = client.post('/genera-sostituzioni', data=data, content_type='multipart/form-data')
         assert response.status_code == 400
@@ -93,7 +137,8 @@ class TestUploadEndpoint:
         data = {
             'orario': create_excel_file(),
             'assenze': create_excel_file(filename='test.csv'),
-            'data': '2025-03-18'
+            'data': '2025-03-18',
+            'max_modelli': '10'
         }
         response = client.post('/genera-sostituzioni', data=data, content_type='multipart/form-data')
         assert response.status_code == 400
@@ -102,7 +147,8 @@ class TestUploadEndpoint:
     def test_missing_date(self, client):
         data = {
             'orario': create_excel_file(),
-            'assenze': create_excel_file()
+            'assenze': create_excel_file(),
+            'max_modelli': '10'
         }
         response = client.post('/genera-sostituzioni', data=data, content_type='multipart/form-data')
         assert response.status_code == 400
@@ -112,7 +158,8 @@ class TestUploadEndpoint:
         data = {
             'orario': create_excel_file(),
             'assenze': create_excel_file(),
-            'data': '18-03-2025'
+            'data': '18-03-2025',
+            'max_modelli': '10'
         }
         response = client.post('/genera-sostituzioni', data=data, content_type='multipart/form-data')
         assert response.status_code == 400
@@ -141,15 +188,18 @@ class TestUploadEndpoint:
             return [], [ass1, ass2], []
         monkeypatch.setattr('app.routes.upload.parse_all', mock_parse_all)
 
-        # Mock calcola_assegnazioni per evitare esecuzione reale (non arriveremo a chiamarlo)
+        # Mock calcola_assegnazioni per evitare esecuzione reale
         def mock_calcola_assegnazioni(*args, **kwargs):
             return []
-        monkeypatch.setattr('app.routes.upload.calcola_assegnazioni', mock_calcola_assegnazioni)
+        monkeypatch.setattr('app.asp_solver.calcola_assegnazioni', mock_calcola_assegnazioni)
+        import app.routes.upload
+        monkeypatch.setattr(app.routes.upload, 'calcola_assegnazioni', mock_calcola_assegnazioni)
 
         data = {
             'orario': create_excel_file(),
             'assenze': create_excel_file(),
-            'data': '2025-03-20'  # data senza assenze
+            'data': '2025-03-20',  # data senza assenze
+            'max_modelli': '10'
         }
         response = client.post('/genera-sostituzioni', data=data, content_type='multipart/form-data')
         assert response.status_code == 400

@@ -33,7 +33,8 @@ def test_end2end(generated_files, client):
         data = {
             'orario': (f_orario, os.path.basename(orario_file)),
             'assenze': (f_assenze, os.path.basename(assenze_file)),
-            'data': '2025-03-10'  # data fissa per il test
+            'data': '2025-03-10',  # data fissa per il test
+            'max_modelli': '10'    # limite massimo di modelli
         }
         response = client.post('/genera-sostituzioni', data=data, content_type='multipart/form-data')
 
@@ -52,6 +53,9 @@ def test_end2end(generated_files, client):
     assert 'stats' in json_data
     num_assegnazioni = json_data['stats']['assegnazioni']
     num_modelli = json_data['stats']['modelli_trovati']
+    max_modelli_richiesti = json_data['stats'].get('max_modelli_richiesti', 10)
+
+    print(f"Modelli richiesti: {max_modelli_richiesti}, Modelli trovati: {num_modelli}")
 
     # 2. Recupero del primo modello (formato raggruppato)
     response2 = client.get('/assegnazioni')
@@ -76,7 +80,9 @@ def test_end2end(generated_files, client):
     print(f"Numero modelli: {len(modelli)}")
 
     assert response_all.status_code == 200
+    # Verifica che il numero di modelli trovati non superi il limite richiesto
     assert len(modelli) == num_modelli
+    assert len(modelli) <= max_modelli_richiesti
 
     # 4. Verifica di non avere conflitti nel primo modello
     if assegnazioni:
