@@ -76,6 +76,9 @@ def upload_files():
         docenti, assenze, visite = parse_all(
             orario_path, assenze_path, visite_path, ore_giornaliere
         )
+        
+        # Salva i docenti per analisi future
+        current_app.config['ULTIMI_DOCENTI'] = docenti
 
         # Filtra le assenze per la data selezionata
         assenze_filtrate = [a for a in assenze if a.data == data_selezionata]

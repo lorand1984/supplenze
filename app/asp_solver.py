@@ -88,7 +88,7 @@ def calcola_assegnazioni(
     ctl.ground([("base", [])])
 
     if tutti_modelli:
-        ctl.configuration.solve.models = 0  # tutti i modelli
+        ctl.configuration.solve.models = 10  # tutti i modelli
         modelli = []
 
         def on_model(model):

@@ -14,6 +14,9 @@ def create_app():
 
     from app.routes.assegnazioni import assegnazioni_bp
     app.register_blueprint(assegnazioni_bp)
+    
+    from app.routes.analisi import analisi_bp
+    app.register_blueprint(analisi_bp)
 
     # Variabile globale per memorizzare le ultime assegnazioni
     app.config['ULTIME_ASSEGNAZIONI'] = []
