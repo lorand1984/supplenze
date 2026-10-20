@@ -72,12 +72,14 @@ class TestUploadEndpoint:
         assert response.status_code == 200
         assert response.json['message'] == 'File elaborati con successo'
         assert response.json['stats'] == {
-            'docenti': 1,
+             'docenti': 1,
             'assenze': 1,
             'visite': 0,
             'assegnazioni': 0,
             'modelli_trovati': 0,
-            'max_modelli_richiesti': 10
+            'max_modelli_richiesti': 10,
+            'assenze_ignorate': 2,
+            'assenze_senza_supplenza': 0
         }
 
     def test_missing_orario(self, client):
@@ -204,3 +206,90 @@ class TestUploadEndpoint:
         response = client.post('/genera-sostituzioni', data=data, content_type='multipart/form-data')
         assert response.status_code == 400
         assert 'Nessuna assenza trovata per la data' in response.json['error']
+        
+    # tests/test_upload.py (aggiungere in coda alla classe TestUploadEndpoint)
+
+    def test_upload_include_statistiche_us20_us26(self, client, monkeypatch):
+        """Verifica che la risposta POST includa i conteggi di assenze ignorate e senza supplenza."""
+        from datetime import date as _date
+        from app.models import Assenza, Docente
+
+        def mock_parse_all(a, b, c=None, d=6):
+            docente = Docente(nome="Rossi", orario={(1, 1): "1A"})
+            # Assenza che genera US20 (ora 2 non è lezione)
+            ass_ignorata = Assenza(
+                docente_nome="Rossi",
+                data=_date(2025, 3, 10),
+                ora_inizio=2,
+                ora_fine=2,
+                tipo_assenza="PERMESSO",
+                data_comunicazione=_date(2025, 3, 10),
+            )
+            # Assenza che genera US26 (ora 1 = prima, preavviso ≥48h)
+            ass_senza = Assenza(
+                docente_nome="Rossi",
+                data=_date(2025, 3, 10),
+                ora_inizio=1,
+                ora_fine=1,
+                tipo_assenza="PERMESSO",
+                data_comunicazione=_date(2025, 3, 8),
+            )
+            return [docente], [ass_ignorata, ass_senza], []
+
+        def mock_calcola_assegnazioni(*args, **kwargs):
+            return []
+
+        monkeypatch.setattr('app.routes.upload.parse_all', mock_parse_all)
+        monkeypatch.setattr('app.asp_solver.calcola_assegnazioni', mock_calcola_assegnazioni)
+        import app.routes.upload
+        monkeypatch.setattr(app.routes.upload, 'calcola_assegnazioni', mock_calcola_assegnazioni)
+
+        data = {
+            'orario': create_excel_file(),
+            'assenze': create_excel_file(),
+            'data': '2025-03-10',
+            'max_modelli': '10'
+        }
+        response = client.post('/genera-sostituzioni', data=data, content_type='multipart/form-data')
+        assert response.status_code == 200
+        stats = response.json['stats']
+        assert 'assenze_ignorate' in stats
+        assert 'assenze_senza_supplenza' in stats
+        assert stats['assenze_ignorate'] == 1
+        assert stats['assenze_senza_supplenza'] == 1
+
+
+    def test_endpoint_assenze_senza_supplenza(self, client):
+        """Verifica che l'endpoint /assenze_senza_supplenza restituisca le due liste."""
+        with client.application.app_context():
+            client.application.config['ASSENZE_IGNORATE'] = [
+                {'docente': 'Rossi', 'data': '2025-03-10', 'ora': 2,
+                 'classe': None, 'motivo': "Il docente non aveva lezione in quest'ora"}
+            ]
+            client.application.config['ASSENZE_SENZA_SUPPLENZA'] = [
+                {'docente': 'Rossi', 'data': '2025-03-10', 'ora': 1,
+                 'classe': '1A', 'motivo': "Preavviso ≥48h e ora prima della classe"}
+            ]
+
+        response = client.get('/assenze_senza_supplenza')
+        assert response.status_code == 200
+        data = response.get_json()
+        assert 'ignorate' in data
+        assert 'senza_supplenza' in data
+        assert len(data['ignorate']) == 1
+        assert len(data['senza_supplenza']) == 1
+        assert data['ignorate'][0]['docente'] == 'Rossi'
+        assert data['senza_supplenza'][0]['classe'] == '1A'
+
+
+    def test_endpoint_assenze_senza_supplenza_vuoto(self, client):
+        """Con configurazione vuota deve restituire due liste vuote."""
+        with client.application.app_context():
+            client.application.config['ASSENZE_IGNORATE'] = []
+            client.application.config['ASSENZE_SENZA_SUPPLENZA'] = []
+
+        response = client.get('/assenze_senza_supplenza')
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data['ignorate'] == []
+        assert data['senza_supplenza'] == []
