@@ -1,3 +1,5 @@
+# app/routes/upload.py
+
 import os
 import tempfile
 from datetime import datetime
@@ -6,18 +8,22 @@ from werkzeug.utils import secure_filename
 
 from app.parser import parse_all
 from app.asp_solver import calcola_assegnazioni
+from app.analisi_assenze import analizza_assenze
 
 upload_bp = Blueprint('upload', __name__)
 
 ALLOWED_EXTENSIONS = {'xlsx'}
 
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
 
 @upload_bp.route('/', methods=['GET'])
 def upload_page():
     """Pagina HTML di upload (frontend)."""
     return render_template('upload.html')
+
 
 @upload_bp.route('/genera-sostituzioni', methods=['POST'])
 def upload_files():
@@ -53,7 +59,7 @@ def upload_files():
     except ValueError:
         return jsonify({'error': 'Formato data non valido (YYYY-MM-DD)'}), 400
 
-    # 3. Gestione numero massimo di modelli (nuovo)
+    # 3. Gestione numero massimo di modelli
     max_modelli_str = request.form.get('max_modelli', '10')
     try:
         max_modelli = int(max_modelli_str)
@@ -106,10 +112,17 @@ def upload_files():
             max_modelli=max_modelli
         )
 
-        # Memorizza i risultati, la data e il limite usato
+        # Analisi assenze senza supplenza (US20 e US26)
+        ignorate, senza_supplenza = analizza_assenze(
+            docenti, assenze_filtrate, visite, ore_giornaliere
+        )
+
+        # Memorizza i risultati, la data e le analisi
         current_app.config['ULTIME_ASSEGNAZIONI'] = assegnazioni
         current_app.config['ULTIMI_MODELLI'] = modelli
         current_app.config['DATA_SUPPLENZE'] = data_selezionata.isoformat()
+        current_app.config['ASSENZE_IGNORATE'] = ignorate
+        current_app.config['ASSENZE_SENZA_SUPPLENZA'] = senza_supplenza
         current_app.config['MAX_MODELLI'] = max_modelli
 
         return jsonify({
@@ -120,7 +133,9 @@ def upload_files():
                 'visite': len(visite),
                 'assegnazioni': len(assegnazioni) if assegnazioni else 0,
                 'modelli_trovati': len(modelli),
-                'max_modelli_richiesti': max_modelli
+                'max_modelli_richiesti': max_modelli,
+                'assenze_ignorate': len(ignorate),
+                'assenze_senza_supplenza': len(senza_supplenza)
             }
         }), 200
 

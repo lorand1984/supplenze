@@ -78,6 +78,23 @@
             background-color: #fafafa;
             color: #ccc;
         }
+        /* US20 / US26: elenchi in rosso */
+        .assenze-list {
+            color: #e74c3c;
+            margin-top: 30px;
+        }
+        .assenze-list h3 {
+            color: #e74c3c;
+            margin-bottom: 8px;
+        }
+        .assenze-list ul {
+            list-style-type: disc;
+            padding-left: 25px;
+            margin-top: 0;
+        }
+        .assenze-list li {
+            margin: 4px 0;
+        }
     </style>
 </head>
 <body>
@@ -99,12 +116,21 @@
         <div id="tabella-container" style="display:none;">
             <h3 id="model-title">Modello 1</h3>
             <table id="tabella">
-                <thead id="tabella-head">
-                    <!-- intestazioni generate da JS -->
-                </thead>
-                <tbody id="tabella-body">
-                </tbody>
-             </>
+                <thead id="tabella-head"></thead>
+                <tbody id="tabella-body"></tbody>
+            </table>
+        </div>
+
+        <!-- US20: assenze ignorate -->
+        <div id="assenze-ignorate-container" class="assenze-list" style="display:none;">
+            <h3>⚠️ Assenze ignorate (docente non in servizio)</h3>
+            <ul id="assenze-ignorate-list"></ul>
+        </div>
+
+        <!-- US26: assenze senza necessità di sostituzione -->
+        <div id="assenze-senza-supplenza-container" class="assenze-list" style="display:none;">
+            <h3>ℹ️ Assenze senza necessità di sostituzione (preavviso ≥48h su prima/ultima ora)</h3>
+            <ul id="assenze-senza-supplenza-list"></ul>
         </div>
     </div>
 
@@ -112,7 +138,6 @@
         let modelli = [];      // array di modelli (ogni modello è un array di assegnazioni piatte)
         let maxOre = 7;        // configurabile
 
-        // Funzione per raggruppare una lista piatta di assegnazioni per docente supplente
         function raggruppaPerDocente(assegnazioni) {
             const mappa = new Map();
             for (const a of assegnazioni) {
@@ -138,40 +163,68 @@
 
         async function caricaModelli() {
             try {
-                const [modelliRes, infoRes] = await Promise.all([
+                const [modelliRes, infoRes, analisiRes] = await Promise.all([
                     fetch('/assegnazioni?all=true'),
-                    fetch('/data_info')
+                    fetch('/data_info'),
+                    fetch('/assenze_senza_supplenza')
                 ]);
+
                 if (!modelliRes.ok) throw new Error('Errore nel caricamento dei modelli');
                 modelli = await modelliRes.json();
+
                 const info = await infoRes.json();
                 if (info.data) {
-                    document.getElementById('data-info').innerHTML = `📅 Sostituzioni del giorno: <strong>${info.data}</strong>`;
+                    document.getElementById('data-info').innerHTML =
+                        `📅 Sostituzioni del giorno: <strong>${info.data}</strong>`;
                 } else {
                     document.getElementById('data-info').innerHTML = '📅 Data non specificata';
                 }
+
                 document.getElementById('loading').style.display = 'none';
 
-                if (!modelli || modelli.length === 0) {
-                    document.getElementById('error').style.display = 'block';
-                    document.getElementById('error').innerText = 'Nessun modello trovato.';
-                    return;
+                // Popola selettore modelli (primi 100)
+                if (modelli && modelli.length > 0) {
+                    const select = document.getElementById('modelSelect');
+                    select.innerHTML = '';
+                    const maxModelli = Math.min(modelli.length, 100);
+                    for (let i = 0; i < maxModelli; i++) {
+                        const option = document.createElement('option');
+                        option.value = i;
+                        option.textContent = `Modello ${i + 1} (${modelli[i].length} supplenze)`;
+                        select.appendChild(option);
+                    }
+                    document.getElementById('model-selector').style.display = 'block';
+                    visualizzaModello(0);
                 }
 
-                // Popola il selettore con i primi 100 modelli (o tutti se meno)
-                const select = document.getElementById('modelSelect');
-                select.innerHTML = '';
-                const maxModelli = Math.min(modelli.length, 100);
-                for (let i = 0; i < maxModelli; i++) {
-                    const option = document.createElement('option');
-                    option.value = i;
-                    option.textContent = `Modello ${i+1} (${modelli[i].length} supplenze)`;
-                    select.appendChild(option);
-                }
-                document.getElementById('model-selector').style.display = 'block';
+                // --- US20 / US26 ---
+                const analisi = await analisiRes.json();
 
-                // Mostra il primo modello di default
-                visualizzaModello(0);
+                const ignorateList = document.getElementById('assenze-ignorate-list');
+                ignorateList.innerHTML = '';
+                if (analisi.ignorate && analisi.ignorate.length > 0) {
+                    analisi.ignorate.forEach(item => {
+                        const li = document.createElement('li');
+                        li.textContent = `${item.docente} – ${item.data} – ora ${item.ora}` +
+                                         (item.classe ? ` – classe ${item.classe}` : '') +
+                                         ` – ${item.motivo}`;
+                        ignorateList.appendChild(li);
+                    });
+                    document.getElementById('assenze-ignorate-container').style.display = 'block';
+                }
+
+                const senzaList = document.getElementById('assenze-senza-supplenza-list');
+                senzaList.innerHTML = '';
+                if (analisi.senza_supplenza && analisi.senza_supplenza.length > 0) {
+                    analisi.senza_supplenza.forEach(item => {
+                        const li = document.createElement('li');
+                        li.textContent = `${item.docente} – ${item.data} – ora ${item.ora}` +
+                                         ` – classe ${item.classe} – ${item.motivo}`;
+                        senzaList.appendChild(li);
+                    });
+                    document.getElementById('assenze-senza-supplenza-container').style.display = 'block';
+                }
+
             } catch (error) {
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('error').style.display = 'block';
@@ -183,11 +236,10 @@
             const modelloPiatto = modelli[indice];
             if (!modelloPiatto) return;
 
-            // Raggruppa il modello piatto
             const gruppi = raggruppaPerDocente(modelloPiatto);
-            document.getElementById('model-title').textContent = `Modello ${indice+1} (${modelloPiatto.length} supplenze)`;
+            document.getElementById('model-title').textContent =
+                `Modello ${indice + 1} (${modelloPiatto.length} supplenze)`;
 
-            // Costruisce la mappa docente → array[1..maxOre]
             const mappa = new Map();
             for (const gruppo of gruppi) {
                 const docente = gruppo.docente_supplente;
@@ -204,7 +256,6 @@
 
             const docenti = Array.from(mappa.keys()).sort();
 
-            // Costruisce intestazione
             const thead = document.getElementById('tabella-head');
             thead.innerHTML = '';
             const headerRow = document.createElement('tr');
@@ -218,7 +269,6 @@
             }
             thead.appendChild(headerRow);
 
-            // Costruisce corpo
             const tbody = document.getElementById('tabella-body');
             tbody.innerHTML = '';
             for (const docente of docenti) {
@@ -241,7 +291,6 @@
             document.getElementById('tabella-container').style.display = 'block';
         }
 
-        // Evento per il pulsante di visualizzazione
         document.getElementById('loadModelBtn').addEventListener('click', () => {
             const select = document.getElementById('modelSelect');
             const idx = parseInt(select.value);

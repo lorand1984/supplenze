@@ -1,7 +1,10 @@
+# app/routes/assegnazioni.py
+
 from flask import Blueprint, jsonify, current_app, request, render_template
 from collections import defaultdict
 
 assegnazioni_bp = Blueprint('assegnazioni', __name__, template_folder='../templates')
+
 
 def assegna_dict(assegnazione):
     """Converte un oggetto Assegnazione in dict per JSON."""
@@ -11,6 +14,7 @@ def assegna_dict(assegnazione):
         'docente_supplente': assegnazione.docente_supplente_nome,
         'docente_assente': assegnazione.ora_scoperta.docente_assente_nome
     }
+
 
 def raggruppa_per_docente(assegnazioni):
     """
@@ -34,6 +38,7 @@ def raggruppa_per_docente(assegnazioni):
         })
     return risultato
 
+
 @assegnazioni_bp.route('/assegnazioni', methods=['GET'])
 def get_assegnazioni():
     """
@@ -54,13 +59,27 @@ def get_assegnazioni():
             return jsonify([])
         return jsonify(raggruppa_per_docente(assegnazioni))
 
+
 @assegnazioni_bp.route('/visualizza', methods=['GET'])
 def visualizza():
-    return render_template('risultati.html') 
+    return render_template('risultati.html')
+
 
 @assegnazioni_bp.route('/data_info', methods=['GET'])
 def data_info():
     """Restituisce la data delle ultime sostituzioni calcolate."""
     data = current_app.config.get('DATA_SUPPLENZE', None)
-    return jsonify({'data': data})    
-  
+    return jsonify({'data': data})
+
+
+@assegnazioni_bp.route('/assenze_senza_supplenza', methods=['GET'])
+def get_assenze_senza_supplenza():
+    """
+    Restituisce le assenze che non generano supplenza:
+    - ignorate (US20): docente senza lezione o classe in visita
+    - senza_supplenza (US26): preavviso ≥48h e ora prima/ultima della classe
+    """
+    return jsonify({
+        'ignorate': current_app.config.get('ASSENZE_IGNORATE', []),
+        'senza_supplenza': current_app.config.get('ASSENZE_SENZA_SUPPLENZA', [])
+    })
