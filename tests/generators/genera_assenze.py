@@ -7,6 +7,7 @@ from openpyxl import load_workbook
 from openpyxl import Workbook
 from openpyxl.styles import Alignment
 
+
 def leggi_orario(file_orario):
     """
     Legge un file Excel di orario e restituisce un dizionario:
@@ -68,6 +69,7 @@ def leggi_orario(file_orario):
 
     return orario
 
+
 def genera_assenze(
     output_file="assenze_docenti.xlsx",
     num_assenze=10,
@@ -109,6 +111,8 @@ def genera_assenze(
         DOCENTI = [f"Docente_{i+1}" for i in range(num_docenti)]
 
     # Se modalità "solo lezioni", carica l'orario e costruisci la lista di tutte le lezioni
+    orario_docenti = {}
+    lezioni_disponibili = []
     if solo_lezioni:
         if not orario_file:
             raise ValueError("Per la modalità 'solo lezioni' è necessario specificare un file orario (--orario-file)")
@@ -117,7 +121,6 @@ def genera_assenze(
             raise ValueError("Nessun docente trovato nell'orario. Verifica il formato del file.")
 
         # Costruisci una lista di tutte le lezioni disponibili (docente, giorno, ora)
-        lezioni_disponibili = []
         for docente, lezioni in orario_docenti.items():
             for g, o in lezioni:
                 lezioni_disponibili.append((docente, g, o))
@@ -125,7 +128,7 @@ def genera_assenze(
         if not lezioni_disponibili:
             raise ValueError("Nessuna lezione trovata nell'orario.")
 
-        # Filtra DOCENTI per quelli presenti nell'orario (utile per il caso random, ma qui non serve)
+        # Filtra DOCENTI per quelli presenti nell'orario
         DOCENTI = [d for d in DOCENTI if d in orario_docenti]
         if not DOCENTI:
             raise ValueError("Nessun docente della lista è presente nell'orario.")
@@ -162,6 +165,15 @@ def genera_assenze(
         if solo_lezioni:
             # Scegli una lezione casuale dalla lista delle lezioni disponibili
             docente, giorno, ora = random.choice(lezioni_disponibili)
+
+            # Scegli una data che corrisponda al giorno della lezione
+            matching_dates = [d for d in date_list if d.weekday() + 1 == giorno]
+            if not matching_dates:
+                # Nessuna data nel range corrisponde al giorno della lezione:
+                # salta e riprova (max_tentativi evita loop infiniti)
+                continue
+            data = random.choice(matching_dates)
+
             # Decidi se l'assenza copre anche l'ora successiva (se il docente ha lezione anche lì)
             ora_fine = ora
             if (giorno, ora + 1) in orario_docenti.get(docente, set()) and random.random() < 0.5:
@@ -169,7 +181,6 @@ def genera_assenze(
         else:
             # Modalità random: scegli docente e orario casuale
             docente = random.choice(DOCENTI)
-            # Scegli una data dal pool
             data = random.choices(date_list, weights=weights)[0]
 
             if random.random() < 0.1:
@@ -179,10 +190,6 @@ def genera_assenze(
                 ora = random.randint(1, ore_giornaliere - 1)
                 durata = random.randint(0, 1)
                 ora_fine = min(ora + durata, ore_giornaliere)
-
-        # Scegli data (per modalità random è già stata scelta, per solo_lezioni la scegliamo ora)
-        if solo_lezioni:
-            data = random.choices(date_list, weights=weights)[0]
 
         tipo = random.choice(TIPO_ASSENZA)
 
@@ -206,7 +213,7 @@ def genera_assenze(
         print(f"[Generatore] Attenzione: generate solo {generate_count} assenze su {num_assenze} richieste (mancanza di dati).")
 
     for col in [2, 6]:
-        for cell in ws.iter_cols(min_col=col, max_col=col, min_row=2, max_row=num_assenze+1):
+        for cell in ws.iter_cols(min_col=col, max_col=col, min_row=2, max_row=num_assenze + 1):
             for c in cell:
                 c.number_format = 'YYYY-MM-DD'
 
@@ -225,6 +232,7 @@ def genera_assenze(
 
     return output_path
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Genera un file Excel di assenze.")
     parser.add_argument("--output", "-o", default="assenze_docenti.xlsx", help="Nome del file di output")
@@ -237,7 +245,8 @@ if __name__ == "__main__":
     parser.add_argument("--docenti-list", "-dl", help="File con lista di docenti (uno per riga, opzionale)")
     parser.add_argument("--preavviso", "-p", choices=["insufficiente", "sufficiente", "misto"],
                         default="misto", help="Tipo di preavviso")
-    parser.add_argument("--solo-lezioni", action="store_true", help="Genera assenze solo in ore in cui il docente ha lezione")
+    parser.add_argument("--solo-lezioni", action="store_true",
+                        help="Genera assenze solo in ore in cui il docente ha lezione")
     parser.add_argument("--orario-file", "-of", help="File Excel dell'orario (richiesto con --solo-lezioni)")
 
     args = parser.parse_args()
