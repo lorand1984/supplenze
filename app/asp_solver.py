@@ -1,3 +1,5 @@
+# app/asp_solver.py
+
 import os
 import clingo
 from datetime import date
@@ -5,7 +7,8 @@ from typing import List, Optional, Dict, Tuple, Any
 from app.models import Docente, Assenza, VisitaIstruzione, Assegnazione, OraScoperta
 from app.asp_facts import generate_asp_facts
 
-def _estrai_modello(model, richieste_trovate, mappa_data):
+
+def _estrai_modello(model, richieste_trovate, supplenze_automatiche, mappa_data):
     """Converte un modello Clingo in lista di oggetti Assegnazione."""
     assegnazioni = []
     for sym in model.symbols(shown=True):
@@ -14,7 +17,13 @@ def _estrai_modello(model, richieste_trovate, mappa_data):
             giorno = sym.arguments[1].number
             ora = sym.arguments[2].number
             classe = str(sym.arguments[3]).strip('"')
+
+            # Il docente assente può essere il titolare (supplenza normale)
+            # o il docente di materia (supplenza automatica)
             docente_assente = richieste_trovate.get((giorno, ora, classe), "")
+            if not docente_assente:
+                docente_assente = supplenze_automatiche.get((giorno, ora, classe), "")
+
             data = mappa_data.get((giorno, ora, classe))
             if data:
                 ora_scoperta = OraScoperta(
@@ -25,8 +34,11 @@ def _estrai_modello(model, richieste_trovate, mappa_data):
                     richiede_supplenza=True,
                     stato="assegnata"
                 )
-                assegnazioni.append(Assegnazione(ora_scoperta=ora_scoperta, docente_supplente_nome=docente))
+                assegnazioni.append(
+                    Assegnazione(ora_scoperta=ora_scoperta, docente_supplente_nome=docente)
+                )
     return assegnazioni
+
 
 def calcola_assegnazioni(
     docenti: List[Docente],
@@ -38,8 +50,8 @@ def calcola_assegnazioni(
 ) -> List[Any]:
     """
     Esegue il solver ASP per determinare le assegnazioni delle supplenze.
-    Se tutti_modelli=True, restituisce una lista di liste di Assegnazione (tutti i modelli, limitati a max_modelli).
-    Altrimenti restituisce una lista di Assegnazione (primo modello).
+    Se tutti_modelli=True, restituisce una lista di liste di Assegnazione (tutti i modelli,
+    limitati a max_modelli). Altrimenti restituisce una lista di Assegnazione (primo modello).
     Solleva RuntimeError se il problema è insoddisfacibile.
     """
     if visite is None:
@@ -55,8 +67,9 @@ def calcola_assegnazioni(
 
     program = regole_us6 + "\n" + regole_us7 + "\n" + fatti
 
-    # Raccogli i fatti richiede_supplenza (per docente_assente)
+    # Raccogli fatti derivati (per docente_assente)
     richieste_trovate: Dict[Tuple[int, int, str], str] = {}
+    supplenze_automatiche: Dict[Tuple[int, int, str], str] = {}
     mappa_data: Dict[Tuple[int, int, str], date] = {}
 
     # Costruisci mappa data dalle assenze
@@ -69,11 +82,12 @@ def calcola_assegnazioni(
                 if classe:
                     mappa_data[(giorno_sett, ora, classe)] = ass.data
 
-    # Prima esecuzione per raccogliere richieste
+    # Prima esecuzione per raccogliere richieste e supplenze automatiche
     ctl_temp = clingo.Control()
     ctl_temp.add("base", [], program)
     ctl_temp.ground([("base", [])])
-    def collect_richieste(model):
+
+    def collect_derived(model):
         for sym in model.symbols(shown=True):
             if sym.name == "richiede_supplenza" and len(sym.arguments) == 4:
                 docente_assente = str(sym.arguments[0]).strip('"')
@@ -81,20 +95,28 @@ def calcola_assegnazioni(
                 ora = sym.arguments[2].number
                 classe = str(sym.arguments[3]).strip('"')
                 richieste_trovate[(giorno, ora, classe)] = docente_assente
-    ctl_temp.solve(on_model=collect_richieste)
+            elif sym.name == "supplenza_automatica" and len(sym.arguments) == 5:
+                docente_materia = str(sym.arguments[4]).strip('"')
+                giorno = sym.arguments[1].number
+                ora = sym.arguments[2].number
+                classe = str(sym.arguments[3]).strip('"')
+                supplenze_automatiche[(giorno, ora, classe)] = docente_materia
 
-    # Ora esegui la ricerca dei modelli di assegnazione
+    ctl_temp.solve(on_model=collect_derived)
+
+    # Seconda esecuzione per la ricerca dei modelli di assegnazione
     ctl = clingo.Control()
     ctl.add("base", [], program)
     ctl.ground([("base", [])])
 
     if tutti_modelli:
-        # Imposta il limite massimo di modelli (parametro configurabile)
         ctl.configuration.solve.models = max_modelli
         modelli = []
 
         def on_model(model):
-            modelli.append(_estrai_modello(model, richieste_trovate, mappa_data))
+            modelli.append(
+                _estrai_modello(model, richieste_trovate, supplenze_automatiche, mappa_data)
+            )
 
         result = ctl.solve(on_model=on_model)
 
@@ -104,14 +126,15 @@ def calcola_assegnazioni(
         return modelli
 
     else:
-        # Solo il primo modello
         modello_trovato = None
 
         def on_model(model):
             nonlocal modello_trovato
             if modello_trovato is not None:
                 return
-            modello_trovato = _estrai_modello(model, richieste_trovate, mappa_data)
+            modello_trovato = _estrai_modello(
+                model, richieste_trovate, supplenze_automatiche, mappa_data
+            )
 
         result = ctl.solve(on_model=on_model)
 
