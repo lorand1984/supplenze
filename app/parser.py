@@ -10,7 +10,16 @@ GIORNI_MAP = {'Lun': 1, 'Mar': 2, 'Mer': 3, 'Gio': 4, 'Ven': 5}
 
 
 def parse_orario(file_path: str) -> List[Docente]:
-    """Legge il file Excel dell'orario docenti (con colonna Tipo opzionale e compresenze)."""
+    """
+    Legge il file Excel dell'orario docenti.
+    Supporta due formati:
+      1) Con colonna "Tipo" (Materia/ITP/Sostegno).
+      2) Senza colonna "Tipo": il tipo è inferito dal prefisso del nome.
+         - "ITP_<nome>"   -> tipo "itp", nome "<nome>"
+         - "Sost_<nome>"  -> tipo "sostegno", nome "<nome>"
+         - altri nomi     -> tipo "materia", nome invariato
+    Le righe completamente vuote vengono ignorate (possono essere usate come separatori).
+    """
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"File non trovato: {file_path}")
 
@@ -27,6 +36,7 @@ def parse_orario(file_path: str) -> List[Docente]:
     tipo_presente = len(headers) > 1 and headers[1] == "Tipo"
     offset_ore = 2 if tipo_presente else 1
 
+    # Costruisci lista delle colonne orarie valide
     ore_colonne = []
     for h in headers[offset_ore:]:
         if not isinstance(h, str):
@@ -52,20 +62,42 @@ def parse_orario(file_path: str) -> List[Docente]:
 
     docenti = []
     for row in ws.iter_rows(min_row=2, values_only=True):
-        nome_docente = row[0]
-        if nome_docente is None:
+        # Salta righe completamente vuote (separatori)
+        if all(cell is None or (isinstance(cell, str) and cell.strip() == "")
+               for cell in row):
             continue
-        if not isinstance(nome_docente, str):
-            raise ValueError(f"Nome docente non valido: {nome_docente}")
 
-        tipo = "materia"
-        if tipo_presente and len(row) > 1:
-            tipo_raw = row[1]
-            if isinstance(tipo_raw, str) and tipo_raw.strip():
-                tipo = tipo_raw.strip().lower()
-                if tipo not in ("materia", "itp", "sostegno"):
-                    raise ValueError(f"Tipo non valido per {nome_docente}: {tipo_raw}")
+        nome_raw = row[0]
+        if nome_raw is None:
+            continue
+        if not isinstance(nome_raw, str):
+            raise ValueError(f"Nome docente non valido: {nome_raw}")
 
+        nome_raw = nome_raw.strip()
+
+        # Determina tipo e nome
+        if tipo_presente and len(row) > 1 and isinstance(row[1], str) and row[1].strip():
+            # Formato con colonna Tipo
+            tipo = row[1].strip().lower()
+            if tipo not in ("materia", "itp", "sostegno"):
+                raise ValueError(f"Tipo non valido per {nome_raw}: {row[1]}")
+            nome = nome_raw
+        else:
+            # Formato senza colonna Tipo: inferisci dal prefisso
+            nome_lower = nome_raw.lower()
+            if nome_lower.startswith("itp_"):
+                tipo = "itp"
+                nome = nome_raw[4:].strip()
+            elif nome_lower.startswith("sost_"):
+                tipo = "sostegno"
+                nome = nome_raw[5:].strip()
+            else:
+                tipo = "materia"
+                nome = nome_raw
+            if not nome:
+                raise ValueError(f"Nome docente vuoto dopo il prefisso: {nome_raw}")
+
+        # Costruisci orario
         orario = {}
         valori_ore = row[offset_ore:]
         for idx, valore in enumerate(valori_ore):
@@ -79,7 +111,7 @@ def parse_orario(file_path: str) -> List[Docente]:
             else:
                 orario[(giorno, ora)] = str(valore).strip()
 
-        docenti.append(Docente(nome=nome_docente, tipo=tipo, orario=orario))
+        docenti.append(Docente(nome=nome, tipo=tipo, orario=orario))
 
     # Validazione compresenze
     doc_map = {d.nome: d for d in docenti}
@@ -98,9 +130,20 @@ def parse_orario(file_path: str) -> List[Docente]:
                             f"Compresenza di {d.nome} in ({g},{o}) con '{materia}' "
                             f"che non è un docente di materia"
                         )
+                elif val and val != "D" and ":" not in val:
+                    raise ValueError(
+                        f"ITP/sostegno {d.nome} in ({g},{o}) ha valore '{val}' "
+                        f"senza formato compresenza 'classe:docente_materia'"
+                    )
+        elif d.tipo == "materia":
+            for (g, o), val in d.orario.items():
+                if val and val != "D" and ":" in val:
+                    raise ValueError(
+                        f"Docente di materia {d.nome} in ({g},{o}) ha formato "
+                        f"compresenza '{val}' non valido per un docente di materia"
+                    )
 
     return docenti
-
 
 def parse_assenze(file_path: str) -> List[Assenza]:
     """Legge il file Excel delle assenze."""
