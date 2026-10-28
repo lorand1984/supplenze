@@ -13,11 +13,15 @@
 %   - supplenza_automatica(ITP, Giorno, Ora, Classe, DocenteMateria)
 
 % ----------------------------------------------------------------------
+% 0. Dominio delle ore (necessario per rendere safe la variabile Ora)
+% ----------------------------------------------------------------------
+ora(1..7).
+
+% ----------------------------------------------------------------------
 % 1. Ore di lezione effettive di una classe (escludendo le visite)
 % ----------------------------------------------------------------------
 ore_classe(G, Classe, Ora) :- lezione(_, G, Ora, Classe).
 
-% Se c'è una visita per quella classe in quel giorno, tutte le ore sono saltate.
 visita_intera_giornata(Classe, G) :- visita(Classe, G, 1, _).
 
 ore_effettive(G, Classe, Ora) :-
@@ -25,7 +29,7 @@ ore_effettive(G, Classe, Ora) :-
     not visita_intera_giornata(Classe, G).
 
 % ----------------------------------------------------------------------
-% 2. Prima e ultima ora per classe/giorno (usando aggregati)
+% 2. Prima e ultima ora per classe/giorno
 % ----------------------------------------------------------------------
 prima_ora(G, Classe, Ora) :-
     ore_effettive(G, Classe, Ora),
@@ -46,16 +50,12 @@ ora_assente(Docente, G, Ora, Classe) :-
 % ----------------------------------------------------------------------
 % 4. Determinazione ore che richiedono supplenza
 % ----------------------------------------------------------------------
-% Caso 1: preavviso insufficiente -> tutte le ore effettive coperte richiedono supplenza
-% (escluse quelle già coperte da supplenza automatica)
 richiede_supplenza(Docente, G, Ora, Classe) :-
     ora_assente(Docente, G, Ora, Classe),
     ore_effettive(G, Classe, Ora),
     assenza(Docente, G, _, _, false),
     not supplenza_automatica(_, G, Ora, Classe, _).
 
-% Caso 2: preavviso sufficiente -> solo le ore effettive che non sono né prima né ultima
-% (escluse quelle già coperte da supplenza automatica)
 richiede_supplenza(Docente, G, Ora, Classe) :-
     ora_assente(Docente, G, Ora, Classe),
     ore_effettive(G, Classe, Ora),
@@ -67,14 +67,20 @@ richiede_supplenza(Docente, G, Ora, Classe) :-
 % ----------------------------------------------------------------------
 % 5. US18 – Supplenza automatica da compresenza
 % ----------------------------------------------------------------------
-% Se il docente di materia è assente e c'è una compresenza con ITP/sostegno,
-% l'ITP/sostegno subentra automaticamente, anche su prima/ultima ora.
-% La priorità ITP > sostegno è già gestita a monte nella generazione dei fatti
-% (viene generato un solo fatto compresenza per ogni coppia ora/classe/docente_materia).
+% L'ITP/sostegno subentra al docente di materia assente SOLO se
+% l'ITP/sostegno NON è a sua volta assente in quell'ora.
 supplenza_automatica(ITP, G, Ora, Classe, DocenteMateria) :-
     assenza(DocenteMateria, G, Inizio, Fine, _),
+    ora(Ora),
     Ora >= Inizio, Ora <= Fine,
-    compresenza(ITP, DocenteMateria, G, Ora, Classe).
+    compresenza(ITP, DocenteMateria, G, Ora, Classe),
+    not assenza_itp(ITP, G, Ora).
+
+% L'ITP/sostegno è assente in quell'ora?
+assenza_itp(ITP, G, Ora) :-
+    assenza(ITP, G, Inizio, Fine, _),
+    ora(Ora),
+    Ora >= Inizio, Ora <= Fine.
 
 % ----------------------------------------------------------------------
 % 6. Output

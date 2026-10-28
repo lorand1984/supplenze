@@ -162,3 +162,76 @@ class TestSupplenzaAutomatica:
 
         ctl.solve(on_model=on_model)
         assert len(richieste) == 0
+
+
+
+class TestSupplenzaAutomatica:
+    """US18: supplenza automatica da compresenza."""
+
+    def test_supplenza_automatica_generata(self):
+        fatti = '''
+        lezione("Rossi", 1, 1, "1A").
+        compresenza("ITP1", "Rossi", 1, 1, "1A").
+        assenza("Rossi", 1, 1, 1, false).
+        '''
+        with open(REGOLE_ORE_SCOPERTE_PATH, 'r', encoding='utf-8') as f:
+            regole = f.read()
+        ctl = clingo.Control()
+        ctl.add("base", [], regole + "\n" + fatti)
+        ctl.ground([("base", [])])
+        risultati = []
+
+        def on_model(model):
+            for sym in model.symbols(shown=True):
+                if sym.name == "supplenza_automatica" and len(sym.arguments) == 5:
+                    risultati.append((
+                        str(sym.arguments[0]).strip('"'),
+                        sym.arguments[1].number,
+                        sym.arguments[2].number,
+                        str(sym.arguments[3]).strip('"'),
+                        str(sym.arguments[4]).strip('"'),
+                    ))
+
+        ctl.solve(on_model=on_model)
+        assert ("ITP1", 1, 1, "1A", "Rossi") in risultati
+
+    def test_nessuna_supplenza_automatica_senza_compresenza(self):
+        fatti = '''
+        lezione("Rossi", 1, 1, "1A").
+        assenza("Rossi", 1, 1, 1, false).
+        '''
+        with open(REGOLE_ORE_SCOPERTE_PATH, 'r', encoding='utf-8') as f:
+            regole = f.read()
+        ctl = clingo.Control()
+        ctl.add("base", [], regole + "\n" + fatti)
+        ctl.ground([("base", [])])
+        risultati = []
+
+        def on_model(model):
+            for sym in model.symbols(shown=True):
+                if sym.name == "supplenza_automatica":
+                    risultati.append(sym)
+
+        ctl.solve(on_model=on_model)
+        assert len(risultati) == 0
+
+    def test_richiede_supplenza_esclude_supplenza_automatica(self):
+        fatti = '''
+        lezione("Rossi", 1, 1, "1A").
+        compresenza("ITP1", "Rossi", 1, 1, "1A").
+        assenza("Rossi", 1, 1, 1, false).
+        '''
+        with open(REGOLE_ORE_SCOPERTE_PATH, 'r', encoding='utf-8') as f:
+            regole = f.read()
+        ctl = clingo.Control()
+        ctl.add("base", [], regole + "\n" + fatti)
+        ctl.ground([("base", [])])
+        richieste = []
+
+        def on_model(model):
+            for sym in model.symbols(shown=True):
+                if sym.name == "richiede_supplenza" and len(sym.arguments) == 4:
+                    richieste.append(sym)
+
+        ctl.solve(on_model=on_model)
+        assert len(richieste) == 0

@@ -289,6 +289,76 @@ class TestParseOrario:
         finally:
             os.unlink(temp.name)
 
+    # tests/test_parser.py
+# ... contenuto esistente ...
+
+class TestParseOrarioCompresenze:
+    def test_compresenza_con_docente_materia_inesistente(self):
+        wb = Workbook()
+        ws = wb.active
+        ws.append(["Docente", "Tipo", "Lun-1"])
+        ws.append(["ITP1", "itp", "1A:NonEsiste"])
+        temp = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
+        wb.save(temp.name)
+        temp.close()
+        try:
+            with pytest.raises(ValueError, match="non presente nell'orario"):
+                parse_orario(temp.name)
+        finally:
+            os.unlink(temp.name)
+
+    def test_compresenza_con_docente_non_materia(self):
+        wb = Workbook()
+        ws = wb.active
+        ws.append(["Docente", "Tipo", "Lun-1"])
+        ws.append(["ITP1", "itp", "1A:ITP2"])
+        ws.append(["ITP2", "itp", "D"])
+        temp = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
+        wb.save(temp.name)
+        temp.close()
+        try:
+            with pytest.raises(ValueError, match="non è un docente di materia"):
+                parse_orario(temp.name)
+        finally:
+            os.unlink(temp.name)
+
+    def test_itp_con_codice_classe_senza_compresenza(self):
+        """Un ITP con cella '1A' (senza ':') deve essere rifiutato."""
+        wb = Workbook()
+        ws = wb.active
+        ws.append(["Docente", "Tipo", "Lun-1"])
+        ws.append(["Rossi", "materia", "1A"])
+        ws.append(["ITP1", "itp", "1A"])
+        temp = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
+        wb.save(temp.name)
+        temp.close()
+        try:
+            with pytest.raises(ValueError, match="senza formato compresenza"):
+                parse_orario(temp.name)
+        finally:
+            os.unlink(temp.name)
+
+    def test_inferenza_tipo_da_prefissi(self):
+        """Senza colonna Tipo, ITP_ e Sost_ inferiscono il tipo."""
+        wb = Workbook()
+        ws = wb.active
+        ws.append(["Docente", "Lun-1", "Lun-2"])
+        ws.append(["Rossi", "1A", "D"])
+        ws.append([])  # riga vuota separatore
+        ws.append(["ITP_Mario", "1A:Rossi", "D"])
+        ws.append(["Sost_Anna", "1A:Rossi", "D"])
+        temp = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
+        wb.save(temp.name)
+        temp.close()
+        try:
+            docenti = parse_orario(temp.name)
+            tipi = {d.nome: d.tipo for d in docenti}
+            assert tipi["Rossi"] == "materia"
+            assert tipi["Mario"] == "itp"
+            assert tipi["Anna"] == "sostegno"
+            assert len(docenti) == 3
+        finally:
+            os.unlink(temp.name)
 
 # ----------------------------------------------------------------------
 # Test parse_assenze
