@@ -12,8 +12,12 @@ from tests.generators import genera_orario, genera_assenze
 @pytest.fixture(scope='module')
 def generated_files():
     orario_file = genera_orario.genera_orario("orario_test.xlsx")
+    # Genera assenze tutte il 10 marzo 2025 (data fissa per il test)
     assenze_file = genera_assenze.genera_assenze(
-        "assenze_test.xlsx", num_assenze=10, start_date=date(2025, 3, 10)
+        "assenze_test.xlsx",
+        num_assenze=10,
+        start_date=date(2025, 3, 10),
+        end_date=date(2025, 3, 10),
     )
     yield orario_file, assenze_file
     os.remove(orario_file)
