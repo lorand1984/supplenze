@@ -18,8 +18,6 @@ def _estrai_modello(model, richieste_trovate, supplenze_automatiche, mappa_data)
             ora = sym.arguments[2].number
             classe = str(sym.arguments[3]).strip('"')
 
-            # Il docente assente può essere il titolare (supplenza normale)
-            # o il docente di materia (supplenza automatica)
             docente_assente = richieste_trovate.get((giorno, ora, classe), "")
             if not docente_assente:
                 docente_assente = supplenze_automatiche.get((giorno, ora, classe), "")
@@ -34,11 +32,13 @@ def _estrai_modello(model, richieste_trovate, supplenze_automatiche, mappa_data)
                     richiede_supplenza=True,
                     stato="assegnata"
                 )
-                assegnazioni.append(
-                    Assegnazione(ora_scoperta=ora_scoperta, docente_supplente_nome=docente)
+                assegnazione = Assegnazione(
+                    ora_scoperta=ora_scoperta,
+                    docente_supplente_nome=docente,
+                    is_automatica=((giorno, ora, classe) in supplenze_automatiche)
                 )
+                assegnazioni.append(assegnazione)
     return assegnazioni
-
 
 def calcola_assegnazioni(
     docenti: List[Docente],

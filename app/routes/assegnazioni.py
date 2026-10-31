@@ -12,15 +12,12 @@ def assegna_dict(assegnazione):
         'ora': assegnazione.ora_scoperta.ora,
         'classe': assegnazione.ora_scoperta.classe,
         'docente_supplente': assegnazione.docente_supplente_nome,
-        'docente_assente': assegnazione.ora_scoperta.docente_assente_nome
+        'docente_assente': assegnazione.ora_scoperta.docente_assente_nome,
+        'automatica': getattr(assegnazione, 'is_automatica', False),
     }
 
 
 def raggruppa_per_docente(assegnazioni):
-    """
-    Raggruppa una lista di oggetti Assegnazione per docente supplente.
-    Restituisce lista di dict per JSON.
-    """
     gruppi = defaultdict(list)
     for a in assegnazioni:
         d = assegna_dict(a)
@@ -28,16 +25,16 @@ def raggruppa_per_docente(assegnazioni):
         gruppi[docente].append({
             'ora': d['ora'],
             'docente_assente': d['docente_assente'],
-            'classe': d['classe']
+            'classe': d['classe'],
+            'automatica': d['automatica'],
         })
     risultato = []
     for docente, lista in gruppi.items():
         risultato.append({
             'docente_supplente': docente,
-            'supplenze': lista
+            'supplenze': lista,
         })
     return risultato
-
 
 @assegnazioni_bp.route('/assegnazioni', methods=['GET'])
 def get_assegnazioni():

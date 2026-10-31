@@ -9,6 +9,7 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #f4f6f9;
             margin: 20px;
+            color: #212529;
         }
         .container {
             max-width: 1200px;
@@ -37,6 +38,10 @@
         .link a {
             color: #3498db;
             text-decoration: none;
+            margin: 0 8px;
+        }
+        .link a:hover {
+            text-decoration: underline;
         }
         .model-selector {
             text-align: center;
@@ -49,7 +54,16 @@
             border: 1px solid #ccc;
         }
         select {
-            width: 300px;
+            width: 320px;
+        }
+        button {
+            cursor: pointer;
+            background-color: #3498db;
+            color: white;
+            border: none;
+        }
+        button:hover {
+            background-color: #2980b9;
         }
         .loading, .error {
             text-align: center;
@@ -78,7 +92,12 @@
             background-color: #fafafa;
             color: #ccc;
         }
-        /* US20 / US26: elenchi in rosso */
+        /* Evidenziazione supplenza automatica (US18) */
+        .automatica {
+            background-color: #fff3cd !important;
+            font-weight: 500;
+        }
+        /* Liste US20 / US26 in rosso */
         .assenze-list {
             color: #e74c3c;
             margin-top: 30px;
@@ -86,6 +105,7 @@
         .assenze-list h3 {
             color: #e74c3c;
             margin-bottom: 8px;
+            font-size: 1.05em;
         }
         .assenze-list ul {
             list-style-type: disc;
@@ -100,10 +120,14 @@
 <body>
     <div class="container">
         <h1>Assegnazioni Supplenze</h1>
+
         <div id="data-info" class="data-info"></div>
+
         <div class="link">
             <a href="/">← Carica nuovi file</a>
+            <a href="/analisi/visualizza">📊 Analisi copertura</a>
         </div>
+
         <div id="loading" class="loading">Caricamento in corso...</div>
         <div id="error" class="error" style="display:none;"></div>
 
@@ -136,8 +160,11 @@
 
     <script>
         let modelli = [];      // array di modelli (ogni modello è un array di assegnazioni piatte)
-        let maxOre = 7;        // configurabile
+        const maxOre = 7;      // ore per giornata
 
+        // ------------------------------------------------------------------
+        // Raggruppa una lista piatta di assegnazioni per docente supplente
+        // ------------------------------------------------------------------
         function raggruppaPerDocente(assegnazioni) {
             const mappa = new Map();
             for (const a of assegnazioni) {
@@ -148,19 +175,23 @@
                 mappa.get(docente).push({
                     ora: a.ora,
                     classe: a.classe,
-                    docente_assente: a.docente_assente
+                    docente_assente: a.docente_assente,
+                    automatica: a.automatica || false,
                 });
             }
             const gruppi = [];
             for (const [docente, supplenze] of mappa.entries()) {
                 gruppi.push({
                     docente_supplente: docente,
-                    supplenze: supplenze
+                    supplenze: supplenze,
                 });
             }
             return gruppi;
         }
 
+        // ------------------------------------------------------------------
+        // Caricamento dati
+        // ------------------------------------------------------------------
         async function caricaModelli() {
             try {
                 const [modelliRes, infoRes, analisiRes] = await Promise.all([
@@ -172,6 +203,7 @@
                 if (!modelliRes.ok) throw new Error('Errore nel caricamento dei modelli');
                 modelli = await modelliRes.json();
 
+                // Data delle sostituzioni
                 const info = await infoRes.json();
                 if (info.data) {
                     document.getElementById('data-info').innerHTML =
@@ -182,7 +214,7 @@
 
                 document.getElementById('loading').style.display = 'none';
 
-                // Popola selettore modelli (primi 100)
+                // Selettore modelli (fino a 100)
                 if (modelli && modelli.length > 0) {
                     const select = document.getElementById('modelSelect');
                     select.innerHTML = '';
@@ -195,9 +227,12 @@
                     }
                     document.getElementById('model-selector').style.display = 'block';
                     visualizzaModello(0);
+                } else {
+                    document.getElementById('error').style.display = 'block';
+                    document.getElementById('error').innerText = 'Nessun modello trovato.';
                 }
 
-                // --- US20 / US26 ---
+                // US20 / US26
                 const analisi = await analisiRes.json();
 
                 const ignorateList = document.getElementById('assenze-ignorate-list');
@@ -232,14 +267,20 @@
             }
         }
 
+        // ------------------------------------------------------------------
+        // Visualizza un modello nella tabella a matrice
+        // ------------------------------------------------------------------
         function visualizzaModello(indice) {
             const modelloPiatto = modelli[indice];
             if (!modelloPiatto) return;
 
+            // Raggruppa per docente supplente
             const gruppi = raggruppaPerDocente(modelloPiatto);
             document.getElementById('model-title').textContent =
                 `Modello ${indice + 1} (${modelloPiatto.length} supplenze)`;
 
+            // Mappa: docente -> array di lunghezza maxOre+1
+            // ogni cella è {text, automatica} oppure null
             const mappa = new Map();
             for (const gruppo of gruppi) {
                 const docente = gruppo.docente_supplente;
@@ -248,7 +289,10 @@
                 for (const s of supplenze) {
                     const ora = s.ora;
                     if (ora >= 1 && ora <= maxOre) {
-                        ore[ora] = `${s.classe} (${s.docente_assente})`;
+                        ore[ora] = {
+                            text: `${s.classe} (${s.docente_assente})`,
+                            automatica: s.automatica,
+                        };
                     }
                 }
                 mappa.set(docente, ore);
@@ -256,6 +300,7 @@
 
             const docenti = Array.from(mappa.keys()).sort();
 
+            // Intestazione
             const thead = document.getElementById('tabella-head');
             thead.innerHTML = '';
             const headerRow = document.createElement('tr');
@@ -269,6 +314,7 @@
             }
             thead.appendChild(headerRow);
 
+            // Corpo
             const tbody = document.getElementById('tabella-body');
             tbody.innerHTML = '';
             for (const docente of docenti) {
@@ -276,11 +322,19 @@
                 const cellDocente = row.insertCell();
                 cellDocente.textContent = docente;
                 const ore = mappa.get(docente);
+
                 for (let ora = 1; ora <= maxOre; ora++) {
                     const cell = row.insertCell();
                     const val = ore[ora];
                     if (val) {
-                        cell.textContent = val;
+                        if (val.automatica) {
+                            // US18: supplenza automatica da compresenza
+                            cell.textContent = `🔄 ${val.text}`;
+                            cell.classList.add('automatica');
+                            cell.title = 'Supplenza automatica da compresenza ITP/sostegno';
+                        } else {
+                            cell.textContent = val.text;
+                        }
                     } else {
                         cell.textContent = '';
                         cell.classList.add('empty');
@@ -291,12 +345,16 @@
             document.getElementById('tabella-container').style.display = 'block';
         }
 
+        // ------------------------------------------------------------------
+        // Eventi
+        // ------------------------------------------------------------------
         document.getElementById('loadModelBtn').addEventListener('click', () => {
             const select = document.getElementById('modelSelect');
             const idx = parseInt(select.value);
             visualizzaModello(idx);
         });
 
+        // Avvio
         caricaModelli();
     </script>
 </body>

@@ -157,6 +157,7 @@ class Assegnazione:
     ora_scoperta: OraScoperta
     docente_supplente_nome: str
     timestamp: Optional[datetime] = field(default_factory=datetime.now)
+    is_automatica: bool = False  # US18: True se deriva da compresenza
 
     def __post_init__(self):
         self.ora_scoperta.assegnazione = self
